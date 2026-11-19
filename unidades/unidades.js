@@ -35,8 +35,8 @@ window.UNIDADES = {
     nomeCompleto: "Central Boulevard",
     lema: "Amor é a nossa razão, entrega é a nossa resposta.",
     chave: "centralboulevard_presenca_v1",
-    supabaseUrl: "",                              // preencher quando a base da Boulevard for criada
-    supabaseKey: "",
+    supabaseUrl: "https://ktbejkztkxaurcjrguvk.supabase.co",
+    supabaseKey: "sb_publishable_4PCJsSLl6doKxIXJyPfPBw_IzoZK4kT",
     sw: "../sw.js",
     backupDias: 14,
     cultos: [
