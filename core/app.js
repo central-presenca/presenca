@@ -299,14 +299,24 @@ function renderCal(){
   const n=state.dias.size;
   box.innerHTML=`<div class="cal-h"><button type="button" data-nav="-1" aria-label="Mês anterior">‹</button><b>${MESES[m-1]} ${y}</b><button type="button" data-nav="1" aria-label="Próximo mês">›</button></div>
   <div class="cal-g">${["D","S","T","Q","Q","S","S"].map(x=>`<i>${x}</i>`).join("")}${cel}</div>
-  <div class="cal-f"><span>${n?`${n} data${n>1?"s":""} escolhida${n>1?"s":""}`:"Toque nas datas para ver no painel. Pode escolher várias."} · <span class="tem-l">●</span> tem culto</span>${n?`<button type="button" data-limpar="1">Limpar</button>`:""}</div>`;
+  <div class="cal-f"><span>${n?`${n} data${n>1?"s":""} escolhida${n>1?"s":""}`:"Toque nas datas para ver no painel. Pode escolher várias."} · <span class="tem-l">●</span> tem culto</span><span>${n?`<button type="button" data-limpar="1">Limpar</button> `:""}<button type="button" data-fechar="1">Fechar</button></span></div>`;
 }
+// O botão "Datas" mostra quantas datas estão escolhidas, mesmo com o calendário fechado
+function rotuloDatas(){ const b=$("f-periodo").querySelector('button[data-v="-1"]'); const n=state.dias.size; if(b) b.textContent = n ? `Datas (${n})` : "Datas"; }
+function fecharCal(){ $("f-range").hidden=true; rotuloDatas(); }
+// Clicar fora do calendário fecha, sem perder as datas escolhidas
+document.addEventListener("click",e=>{
+  if($("f-range").hidden) return;
+  if(e.composedPath().some(el=>el && (el.id==="f-range" || el.id==="f-periodo"))) return;
+  fecharCal();
+});
 $("f-range").addEventListener("click",e=>{
   const b=e.target.closest("button"); if(!b) return;
   if(b.dataset.nav){ const [y,m]=state.calMes.split("-").map(Number); const d=new Date(y,m-1+Number(b.dataset.nav),1); state.calMes=d.getFullYear()+"-"+p2(d.getMonth()+1); renderCal(); return; }
+  if(b.dataset.fechar){ fecharCal(); return; }
   if(b.dataset.limpar){ state.dias.clear(); }
   else if(b.dataset.d){ state.dias.has(b.dataset.d) ? state.dias.delete(b.dataset.d) : state.dias.add(b.dataset.d); }
-  renderCal(); renderDashboard();
+  renderCal(); rotuloDatas(); renderDashboard();
 });
 bindSeg(fc,"culto",String);
 
