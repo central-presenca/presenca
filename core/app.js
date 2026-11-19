@@ -263,7 +263,8 @@ function totals(r){
 let rows = [], canWrite = true, loaded = false, savedAt = "", unlocked = false, usuario = "", log = [];
 let config = {capAud:0, capCdc:0, capCarros:0, capMotos:0, essenciais:["Segurança","Enfermaria"]};
 const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const state = { periodo: 3, culto: "todos", dias: new Set(), calMes: "" };
+const state = { periodo: 3, cultos: new Set(), dias: new Set(), calMes: "" };   // cultos vazio = todos
+const cultoOk = id => !state.cultos.size || state.cultos.has(id);
 
 /* ---------- Abas ---------- */
 const VIEWS = ["painel","lancar","historico"];
@@ -281,7 +282,7 @@ show(location.hash.slice(1));
 
 /* ---------- Filtros ---------- */
 const fc = $("f-culto");
-fc.innerHTML = `<button data-v="todos" aria-pressed="true">Todos</button>` + CULTOS.map(c=>`<button data-v="${c.id}" aria-pressed="false"><i class="dot" style="background:${c.color}"></i>${c.label}</button>`).join("");
+fc.innerHTML = `<button data-v="todos" aria-pressed="true">Todos</button>` + CULTOS.map(c=>`<button data-v="${c.id}" aria-pressed="false" style="--c-sel:${c.color}"><i class="dot" style="background:${c.color}"></i>${c.label}</button>`).join("");
 function bindSeg(el,key,parse){
   el.addEventListener("click",e=>{
     const b=e.target.closest("button"); if(!b) return;
@@ -296,7 +297,7 @@ function renderCal(){
   const box=$("f-range"); if(box.hidden) return;
   if(!state.calMes){ const ult=rows.reduce((m,r)=>r.data>m?r.data:m,""); state.calMes=(ult||isoDate(new Date())).slice(0,7); }
   const [y,m]=state.calMes.split("-").map(Number);
-  const com=new Set(rows.filter(r=>state.culto==="todos"||r.culto===state.culto).map(r=>r.data));
+  const com=new Set(rows.filter(r=>cultoOk(r.culto)).map(r=>r.data));
   const ini=new Date(y,m-1,1), dias=new Date(y,m,0).getDate();
   let cel=""; for(let i=0;i<ini.getDay();i++) cel+=`<span></span>`;
   for(let d=1;d<=dias;d++){ const k=y+"-"+p2(m)+"-"+p2(d), sel=state.dias.has(k), tem=com.has(k);
@@ -323,7 +324,14 @@ $("f-range").addEventListener("click",e=>{
   else if(b.dataset.d){ state.dias.has(b.dataset.d) ? state.dias.delete(b.dataset.d) : state.dias.add(b.dataset.d); }
   renderCal(); rotuloDatas(); renderDashboard();
 });
-bindSeg(fc,"culto",String);
+// Cultos: dá para marcar mais de um (ex.: os dois de domingo). "Todos" limpa a seleção.
+fc.addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  if(b.dataset.v==="todos") state.cultos.clear();
+  else { state.cultos.has(b.dataset.v) ? state.cultos.delete(b.dataset.v) : state.cultos.add(b.dataset.v); if(state.cultos.size===CULTOS.length) state.cultos.clear(); }
+  fc.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", String(x.dataset.v==="todos" ? !state.cultos.size : state.cultos.has(x.dataset.v))));
+  renderDashboard();
+});
 
 /* ---------- Painel ---------- */
 function filtered(){
@@ -334,7 +342,7 @@ function filtered(){
     const lim = parseDate(last); lim.setMonth(lim.getMonth()-state.periodo);
     r = r.filter(x=>parseDate(x.data)>lim);
   }
-  if(state.culto!=="todos") r = r.filter(x=>x.culto===state.culto);
+  if(state.cultos.size) r = r.filter(x=>state.cultos.has(x.culto));
   return r;
 }
 function byWeek(list){
@@ -387,7 +395,7 @@ function renderDashboard(){
     $("wk-sub").textContent = `${cur.n} culto${cur.n===1?"":"s"}: ` + ds.map(ddmm).join(", ") + (ds.length<state.dias.size ? ` (${state.dias.size-ds.length} data${state.dias.size-ds.length>1?"s":""} sem culto lançado)` : "");
   } else {
   $("wk-title").textContent = PER+" " + weekLabel(lk);
-  $("wk-sub").textContent = (state.culto==="todos" ? `${cur.n} de ${CULTOS.length} cultos lançados: ` : "") + cultosNa.join(", ");
+  $("wk-sub").textContent = (!state.cultos.size ? `${cur.n} de ${CULTOS.length} cultos lançados: ` : "") + cultosNa.join(", ");
   }
   const T = (lbl,val,d,hero,cls)=>`<div class="tile${hero?" hero":""} ${cls||""}"><span class="lbl">${lbl}</span><span class="val num">${fmt(val)}</span>${d}</div>`;
   tiles.innerHTML =
@@ -489,7 +497,7 @@ $("b-print").addEventListener("click",()=>{ location.hash="painel"; show("painel
 
 function renderLine(weeks){
   const host=$("ch-total");
-  const series = (state.culto==="todos"?CULTOS:[CMAP[state.culto]]);
+  const series = CULTOS.filter(c=>cultoOk(c.id));
   const xs = weeks.map(w=>w[0]);
   const data = series.map(c=>({c, v: weeks.map(([,rs])=>{ const r=rs.find(x=>x.culto===c.id); return r? totals(r).geral : null; }), ev: weeks.map(([,rs])=>{ const r=rs.find(x=>x.culto===c.id); return r&&r.evento ? r.evento : ""; })}));
   const W=640,H=260,L=40,R=14,Tp=12,B=28;
@@ -549,7 +557,7 @@ function renderVol(list){
 }
 
 function renderCmp(list){
-  const cols = CULTOS.filter(c=>state.culto==="todos"||c.id===state.culto);
+  const cols = CULTOS.filter(c=>cultoOk(c.id));
   const agg = cols.map(c=>{
     const rs=list.filter(r=>r.culto===c.id); const n=rs.length;
     const s={n,geral:0,aud:0,cdc:0,vol:0,vis:0,dec:0,car:0,mot:0,vt:0,pub:0,vcdc:0,ccdc:0};

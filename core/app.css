@@ -231,3 +231,6 @@ select.msel{background:var(--paper);border:1px solid var(--line);border-radius:8
 .obs-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .obs-h .evt{margin-left:0}
 .obs-t{white-space:pre-wrap;font-size:14px;margin-top:6px;line-height:1.5}
+/* Filtro de cultos: cada culto marcado fica com a cor dele */
+#f-culto button[aria-pressed="true"]:not([data-v="todos"]){background:var(--c-sel);color:#fff}
+#f-culto button[aria-pressed="true"]:not([data-v="todos"]) .dot{background:#fff!important}
