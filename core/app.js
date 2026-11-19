@@ -5,6 +5,7 @@
 const UNIDADES = window.UNIDADES;                     // todas as unidades (unidades/unidades.js)
 const U = UNIDADES[window.UNIDADE_ID];                // a unidade desta página
 const pronta = u => !!(u && u.supabaseUrl && u.supabaseKey);
+const CONVITE = /type=(invite|recovery)/.test(location.hash);   // chegou pelo link do convite ou de "esqueci a senha"
 const DIAS = ["domingo","segunda","terça","quarta","quinta","sexta","sábado"];
 const CULTOS = U.cultos.map((c,i)=>({...c, color:c.color||`var(--s${i+1})`}));
 const CMAP = Object.fromEntries(CULTOS.map(c=>[c.id,c]));
@@ -917,9 +918,9 @@ function applyLock(){
 function openLock(mode){
   lockMode = mode || "enter";
   const change = lockMode==="change";
-  $("lock-title").textContent = change ? "Trocar minha senha" : lockMode==="gate" ? "Entrar" : "Entrar para editar";
+  $("lock-title").textContent = change ? (CONVITE ? "Crie a sua senha" : "Trocar minha senha") : lockMode==="gate" ? "Entrar" : "Entrar para editar";
   $("lock-cancel").style.display = lockMode==="gate" ? "none" : "";
-  $("lock-sub").textContent = change ? `Nova senha para ${usuario}.` : lockMode==="gate" ? "Acesso restrito. Entre com o seu e-mail cadastrado." : "Só os e-mails autorizados conseguem lançar, editar ou excluir cultos.";
+  $("lock-sub").textContent = change ? (CONVITE ? `Escolha uma senha para ${usuario}. Nas próximas vezes, é só entrar com o e-mail e essa senha.` : `Nova senha para ${usuario}.`) : lockMode==="gate" ? "Acesso restrito. Entre com o seu e-mail cadastrado." : "Só os e-mails autorizados conseguem lançar, editar ou excluir cultos.";
   $("lock-l2").style.display = change ? "" : "none";
   $("lock-le").style.display = change ? "none" : "";
   $("lock-lu").style.display = change ? "none" : ""; $("lock-unidade").value=U.id;
@@ -976,6 +977,7 @@ async function atualizarSessao(session){
   if(papel){ try{ localStorage.setItem("presenca_unidade", U.id); }catch(e){} }
   if(!papel){ rows=[]; log=[]; try{ renderDashboard(); }catch(e){} }
   applyLock();
+  if(papel && CONVITE && !window.__senhaPedida){ window.__senhaPedida=true; openLock("change"); }
   if(mudou && papel) carregar();
 }
 
