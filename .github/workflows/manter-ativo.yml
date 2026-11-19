@@ -14,6 +14,7 @@ jobs:
         env:
           BASES: |
             https://khyacyndvsnmdaszxlvy.supabase.co sb_publishable_rqzxj_2YbdkS11gfL0V8xg_0p-coC9i
+            https://ktbejkztkxaurcjrguvk.supabase.co sb_publishable_4PCJsSLl6doKxIXJyPfPBw_IzoZK4kT
         run: |
           falhou=0
           while read -r url chave; do
