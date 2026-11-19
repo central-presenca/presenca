@@ -58,6 +58,7 @@ document.body.insertAdjacentHTML("afterbegin", `<header class="band">
     <label class="f" for="lock-p2" id="lock-l2">Repita a nova senha<input type="password" id="lock-p2" autocomplete="off"></label>
     <div class="status err" id="lock-st"></div>
     <div class="btns"><button type="submit" class="btn" id="lock-ok">Entrar</button><button type="button" class="btn ghost" id="lock-cancel">Cancelar</button></div>
+    <button type="button" id="lock-esqueci" style="margin-top:12px;border:0;background:none;padding:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:13px">Esqueci minha senha</button>
   </form>
 </div>
 <main>
@@ -919,18 +920,22 @@ function openLock(mode){
   lockMode = mode || "enter";
   const change = lockMode==="change";
   const obrig = change && !!window.__obrig;   // primeiro acesso ou link de convite: não dá para pular
-  $("lock-title").textContent = change ? (CONVITE ? "Crie a sua senha" : obrig ? "Primeiro acesso: crie a sua senha" : "Trocar minha senha") : lockMode==="gate" ? "Entrar" : "Entrar para editar";
-  $("lock-cancel").style.display = (lockMode==="gate"||obrig) ? "none" : "";
-  $("lock-sub").textContent = change ? (CONVITE ? `Escolha uma senha para ${usuario}. Nas próximas vezes, é só entrar com o e-mail e essa senha.` : obrig ? `Troque a senha provisória por uma só sua. Nas próximas vezes, entre com ${usuario} e a senha nova.` : `Nova senha para ${usuario}.`) : lockMode==="gate" ? "Acesso restrito. Entre com o seu e-mail cadastrado." : "Só os e-mails autorizados conseguem lançar, editar ou excluir cultos.";
-  $("lock-l2").style.display = change ? "" : "none";
+  const reset = lockMode==="reset";             // esqueci minha senha: unidade + e-mail + senha nova
+  $("lock-esqueci").textContent = reset ? "Voltar para entrar" : "Esqueci minha senha";
+  $("lock-esqueci").style.display = change ? "none" : "";
+  $("lock-title").textContent = reset ? "Esqueci minha senha" : change ? (CONVITE ? "Crie a sua senha" : obrig ? "Primeiro acesso: crie a sua senha" : "Trocar minha senha") : lockMode==="gate" ? "Entrar" : "Entrar para editar";
+  $("lock-cancel").style.display = (lockMode==="gate"||obrig||reset) ? "none" : "";
+  $("lock-sub").textContent = reset ? "Escolha a unidade, digite o seu e-mail de acesso e a senha nova." : change ? (CONVITE ? `Escolha uma senha para ${usuario}. Nas próximas vezes, é só entrar com o e-mail e essa senha.` : obrig ? `Troque a senha provisória por uma só sua. Nas próximas vezes, entre com ${usuario} e a senha nova.` : `Nova senha para ${usuario}.`) : lockMode==="gate" ? "Acesso restrito. Entre com o seu e-mail cadastrado." : "Só os e-mails autorizados conseguem lançar, editar ou excluir cultos.";
+  $("lock-l2").style.display = (change||reset) ? "" : "none";
   $("lock-le").style.display = change ? "none" : "";
   $("lock-lu").style.display = change ? "none" : ""; $("lock-unidade").value=U.id;
-  $("lock-ok").textContent = change ? "Salvar nova senha" : "Entrar";
+  $("lock-ok").textContent = (change||reset) ? "Salvar nova senha" : "Entrar";
   $("lock-p1").value=""; $("lock-p2").value=""; $("lock-st").textContent="";
   try{ if(!$("lock-email").value) $("lock-email").value = localStorage.getItem(KEY+"_lastuser")||""; }catch(e){}
   $("modal").hidden=false; (!change && !$("lock-email").value ? $("lock-email") : $("lock-p1")).focus();
 }
 $("lock-cancel").addEventListener("click",()=>{ $("modal").hidden=true; });
+$("lock-esqueci").addEventListener("click",()=>{ if(lockMode==="reset") openLock(window.__voltar||"enter"); else { window.__voltar=lockMode; openLock("reset"); } });
 $("b-lock").addEventListener("click",async ()=>{
   if(unlocked || meuPapel){ await sb.auth.signOut(); return; }
   openLock();
@@ -952,12 +957,20 @@ $("lock-form").addEventListener("submit", async e=>{
   }
   const email=$("lock-email").value.trim().toLowerCase();
   if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}(\.[a-z]{2,})?$/.test(email)){ st.textContent="Digite um e-mail válido."; $("lock-email").focus(); return; }
-  ok.disabled=true; ok.textContent="Entrando…";
+  if(lockMode==="reset"){
+    if(p1.length<6){ st.textContent="Use pelo menos 6 caracteres."; return; }
+    if(p1!==p2){ st.textContent="As senhas não conferem."; return; }
+  }
+  ok.disabled=true; ok.textContent = lockMode==="reset" ? "Salvando…" : "Entrando…";
   // Cada unidade tem a sua própria base e a sua lista de e-mails: quem é de uma unidade não entra na outra.
   const destino=UNIDADES[$("lock-unidade").value]||U;
   const cli = destino.id===U.id ? sb : window.supabase.createClient(destino.supabaseUrl, destino.supabaseKey, {auth:{persistSession:true, autoRefreshToken:false, lock:(nome, espera, fn)=>fn()}});
+  if(lockMode==="reset"){ // troca a senha na base da unidade escolhida e já entra com ela
+    const {data:trocou, error:er}=await cli.rpc("redefinir_senha",{p_email:email, p_senha:p1});
+    if(er || !trocou){ ok.disabled=false; ok.textContent="Salvar nova senha"; st.textContent = er ? "Não foi possível trocar a senha agora. Verifique a internet." : `Este e-mail não tem acesso à ${destino.nomeCompleto}.`; return; }
+  }
   const {error}=await cli.auth.signInWithPassword({email, password:p1});
-  ok.disabled=false; ok.textContent="Entrar";
+  ok.disabled=false; ok.textContent = lockMode==="reset" ? "Salvar nova senha" : "Entrar";
   if(error){ st.textContent = /invalid/i.test(error.message) ? "E-mail ou senha incorretos." : "Não foi possível entrar agora. Verifique a internet."; return; }
   const {data:papel}=await cli.rpc("meu_papel");
   if(!papel){ await cli.auth.signOut(); st.textContent=`Este e-mail não tem acesso à ${destino.nomeCompleto}.`; return; }
