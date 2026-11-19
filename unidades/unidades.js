@@ -52,6 +52,6 @@ window.UNIDADES = {
       {key:"adolescentes", label:"Adolescentes",          curto:"adolescentes", msg:"Adolescentes", re:"^adolesc"},
       {key:"criancas",     label:"Crianças no auditório", curto:"crianças",     msg:"Crianças",     re:"^criancas?\\b", dica:"Ficaram no culto com os pais, não foram para a CDC"}
     ],
-    equipes: ["Livraria/Cafeteria","Staff","Central Msc","Audiovisual","Comunicação","Produção","Ao vivo","Legendários","Segurança","Enfermaria","Integração","Cop","Intercessão","Estacionamento","Dízimos"]
+    equipes: ["Staff","Louvor","Audiovisual","Comunicação","Produção","Legendários","Segurança","Enfermaria","Dízimos","Cafeteria/Livraria","Copa","Intercessão","Integração","Cerimonial","Mova"]
   }
 };
