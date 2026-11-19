@@ -234,3 +234,8 @@ select.msel{background:var(--paper);border:1px solid var(--line);border-radius:8
 /* Filtro de cultos: cada culto marcado fica com a cor dele */
 #f-culto button[aria-pressed="true"]:not([data-v="todos"]){background:var(--c-sel);color:#fff}
 #f-culto button[aria-pressed="true"]:not([data-v="todos"]) .dot{background:#fff!important}
+/* Calendário: X no canto superior esquerdo e botão Confirmar */
+.cal-h .cal-x{border:0;font-size:22px;line-height:1;width:30px;height:30px;color:var(--muted)}
+.cal-nav{display:flex;align-items:center;gap:10px}
+.cal-f .cal-ok{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.cal-f > span:last-child{display:flex;gap:6px;flex-shrink:0}

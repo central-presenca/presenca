@@ -303,9 +303,9 @@ function renderCal(){
   for(let d=1;d<=dias;d++){ const k=y+"-"+p2(m)+"-"+p2(d), sel=state.dias.has(k), tem=com.has(k);
     cel+=`<button type="button" data-d="${k}" class="${sel?"sel":""} ${tem?"tem":""}" aria-pressed="${sel}" title="${tem?"Tem culto lançado":"Sem culto lançado"}">${d}</button>`; }
   const n=state.dias.size;
-  box.innerHTML=`<div class="cal-h"><button type="button" data-nav="-1" aria-label="Mês anterior">‹</button><b>${MESES[m-1]} ${y}</b><button type="button" data-nav="1" aria-label="Próximo mês">›</button></div>
+  box.innerHTML=`<div class="cal-h"><button type="button" class="cal-x" data-fechar="1" aria-label="Fechar calendário">×</button><span class="cal-nav"><button type="button" data-nav="-1" aria-label="Mês anterior">‹</button><b>${MESES[m-1]} ${y}</b><button type="button" data-nav="1" aria-label="Próximo mês">›</button></span></div>
   <div class="cal-g">${["D","S","T","Q","Q","S","S"].map(x=>`<i>${x}</i>`).join("")}${cel}</div>
-  <div class="cal-f"><span>${n?`${n} data${n>1?"s":""} escolhida${n>1?"s":""}`:"Toque nas datas para ver no painel. Pode escolher várias."} · <span class="tem-l">●</span> tem culto</span><span>${n?`<button type="button" data-limpar="1">Limpar</button> `:""}<button type="button" data-fechar="1">Fechar</button></span></div>`;
+  <div class="cal-f"><span>${n?`${n} data${n>1?"s":""} escolhida${n>1?"s":""}`:"Toque nas datas para ver no painel. Pode escolher várias."} · <span class="tem-l">●</span> tem culto</span><span>${n?`<button type="button" data-limpar="1">Limpar</button> `:""}<button type="button" class="cal-ok" data-fechar="1">Confirmar</button></span></div>`;
 }
 // O botão "Datas" mostra quantas datas estão escolhidas, mesmo com o calendário fechado
 function rotuloDatas(){ const b=$("f-periodo").querySelector('button[data-v="-1"]'); const n=state.dias.size; if(b) b.textContent = n ? `Datas (${n})` : "Datas"; }
