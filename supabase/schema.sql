@@ -117,3 +117,23 @@ drop policy if exists registro_ler on public.registro;
 drop policy if exists registro_inserir on public.registro;
 create policy registro_ler on public.registro for select using (public.pode_editar());
 create policy registro_inserir on public.registro for insert with check (public.pode_editar());
+
+-- "Esqueci minha senha": troca a senha de um e-mail cadastrado nesta unidade e anota no registro
+create extension if not exists pgcrypto with schema extensions;
+create or replace function public.redefinir_senha(p_email text, p_senha text) returns boolean
+language plpgsql security definer set search_path = public, extensions, auth as $$
+declare e text := lower(trim(coalesce(p_email,''))); n int;
+begin
+  if length(coalesce(p_senha,'')) < 6 then raise exception 'senha curta'; end if;
+  if not exists (select 1 from public.autorizados where email = e) then return false; end if;
+  update auth.users
+     set encrypted_password = extensions.crypt(p_senha, extensions.gen_salt('bf')),
+         raw_user_meta_data = coalesce(raw_user_meta_data,'{}'::jsonb) || '{"senha_definida":true}'::jsonb,
+         updated_at = now()
+   where lower(email) = e;
+  get diagnostics n = row_count;
+  if n > 0 then insert into public.registro (por, acao) values (e, 'Trocou a senha pelo "Esqueci minha senha"'); end if;
+  return n > 0;
+end $$;
+revoke all on function public.redefinir_senha(text, text) from public;
+grant execute on function public.redefinir_senha(text, text) to anon, authenticated;
