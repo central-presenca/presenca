@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presença de Culto – Central</title>
+<meta name="theme-color" content="#0d0d0d">
+<link rel="icon" href="icon-192.png">
+<script>
+// Endereço sem unidade: abre a última unidade usada neste aparelho (ou Picos). Lá a pessoa escolhe a unidade no login.
+var u = "picos"; try { u = localStorage.getItem("presenca_unidade") || "picos"; } catch (e) {}
+location.replace("./" + u + "/" + location.hash);
+</script>
+</head>
+<body style="background:#0d0d0d;color:#fff;font-family:system-ui,sans-serif">
+<p style="padding:24px"><a href="picos/" style="color:#9dcbee">Central Picos</a> · <a href="boulevard/" style="color:#9dcbee">Central Boulevard</a></p>
+</body>
+</html>
