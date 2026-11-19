@@ -224,3 +224,10 @@ select.msel{background:var(--paper);border:1px solid var(--line);border-radius:8
 .lote[hidden]{display:none}
 .lote table td,.lote table th{white-space:nowrap}
 .lote input[type=checkbox]{width:18px;height:18px}
+/* Observações e eventos no painel */
+#obs-card[hidden]{display:none}
+.obs-i{padding:10px 0;border-top:1px solid var(--line)}
+.obs-i:first-child{border-top:0;padding-top:2px}
+.obs-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.obs-h .evt{margin-left:0}
+.obs-t{white-space:pre-wrap;font-size:14px;margin-top:6px;line-height:1.5}

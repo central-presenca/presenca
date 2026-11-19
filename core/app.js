@@ -89,6 +89,11 @@ document.body.insertAdjacentHTML("afterbegin", `<header class="band">
 
     <div class="tiles" id="tiles"></div>
 
+    <div class="card" id="obs-card" hidden>
+      <div class="head"><div><h2>Observações e eventos</h2><div class="sub" id="obs-sub"></div></div></div>
+      <div id="obs-list"></div>
+    </div>
+
     <div class="grid2">
       <div class="card">
         <div class="head">
@@ -367,7 +372,7 @@ function renderDashboard(){
   if(!weeks.length){
     $("wk-title").textContent = "Sem lançamentos neste filtro";
     $("wk-sub").textContent = "Mude o período ou o culto.";
-    tiles.innerHTML=""; $("ch-total").innerHTML=""; $("lg-total").innerHTML=""; $("ch-vol").innerHTML=""; $("tb-cmp").innerHTML="";
+    $("obs-card").hidden=true; tiles.innerHTML=""; $("ch-total").innerHTML=""; $("lg-total").innerHTML=""; $("ch-vol").innerHTML=""; $("tb-cmp").innerHTML="";
     return;
   }
   renderMes();
@@ -392,6 +397,7 @@ function renderDashboard(){
     T("Voluntários",cur.vol,`<span class="delta flat">nas equipes · + ${fmt(cur.cdcVlt)} VLT CDC = ${fmt(cur.vol+cur.cdcVlt)} no total</span>`+delta(cur.vol,prev&&prev.vol),false,"m-vol")+
     T("Visitantes",cur.vis,delta(cur.vis,prev&&prev.vis),false,"m-vis")+
     T("Decisões por Cristo",cur.dec,delta(cur.dec,prev&&prev.dec),false,"m-dec");
+  renderObs(escolhidas ? list : lrows, escolhidas ? "Datas escolhidas" : `${PER} ${weekLabel(lk)}`);
   renderLine(weeks);
   renderAlerts(lk, lrows);
   renderOcc(lk, lrows);
@@ -399,6 +405,16 @@ function renderDashboard(){
   renderCmp(list);
 }
 
+/* Observações e eventos (Santa Ceia, batismo...) dos cultos que o painel está mostrando */
+function renderObs(lista, quando){
+  const rs=lista.filter(r=>(r.obs||"").trim()||(r.evento||"").trim())
+    .sort((a,b)=> a.data===b.data ? CULTOS.findIndex(c=>c.id===a.culto)-CULTOS.findIndex(c=>c.id===b.culto) : (a.data<b.data?-1:1));
+  $("obs-card").hidden=false;
+  $("obs-sub").textContent = `${quando} · ${lista.length} culto${lista.length===1?"":"s"}`;
+  $("obs-list").innerHTML = rs.length ? rs.map(r=>{ const c=CMAP[r.culto]||{label:r.culto,color:"var(--muted)"};
+    return `<div class="obs-i"><div class="obs-h"><span class="chip"><i class="dot" style="background:${c.color}"></i>${esc(c.label)}</span><span class="num" style="color:var(--muted)">${ddmmyy(r.data)}</span>${r.evento?`<span class="evt">${esc(r.evento)}</span>`:""}</div>${(r.obs||"").trim()?`<div class="obs-t">${esc(r.obs.trim())}</div>`:""}</div>`; }).join("")
+    : `<div class="empty" style="padding:8px 0;text-align:left">Nenhuma observação ou evento nestes cultos.</div>`;
+}
 function pctCls(p){ return p>=95?"c":p>=80?"w":""; }
 function renderAlerts(lk, lrows){
   const out=[];
