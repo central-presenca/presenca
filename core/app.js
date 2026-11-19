@@ -918,9 +918,10 @@ function applyLock(){
 function openLock(mode){
   lockMode = mode || "enter";
   const change = lockMode==="change";
-  $("lock-title").textContent = change ? (CONVITE ? "Crie a sua senha" : "Trocar minha senha") : lockMode==="gate" ? "Entrar" : "Entrar para editar";
-  $("lock-cancel").style.display = lockMode==="gate" ? "none" : "";
-  $("lock-sub").textContent = change ? (CONVITE ? `Escolha uma senha para ${usuario}. Nas próximas vezes, é só entrar com o e-mail e essa senha.` : `Nova senha para ${usuario}.`) : lockMode==="gate" ? "Acesso restrito. Entre com o seu e-mail cadastrado." : "Só os e-mails autorizados conseguem lançar, editar ou excluir cultos.";
+  const obrig = change && !!window.__obrig;   // primeiro acesso ou link de convite: não dá para pular
+  $("lock-title").textContent = change ? (CONVITE ? "Crie a sua senha" : obrig ? "Primeiro acesso: crie a sua senha" : "Trocar minha senha") : lockMode==="gate" ? "Entrar" : "Entrar para editar";
+  $("lock-cancel").style.display = (lockMode==="gate"||obrig) ? "none" : "";
+  $("lock-sub").textContent = change ? (CONVITE ? `Escolha uma senha para ${usuario}. Nas próximas vezes, é só entrar com o e-mail e essa senha.` : obrig ? `Troque a senha provisória por uma só sua. Nas próximas vezes, entre com ${usuario} e a senha nova.` : `Nova senha para ${usuario}.`) : lockMode==="gate" ? "Acesso restrito. Entre com o seu e-mail cadastrado." : "Só os e-mails autorizados conseguem lançar, editar ou excluir cultos.";
   $("lock-l2").style.display = change ? "" : "none";
   $("lock-le").style.display = change ? "none" : "";
   $("lock-lu").style.display = change ? "none" : ""; $("lock-unidade").value=U.id;
@@ -942,9 +943,10 @@ $("lock-form").addEventListener("submit", async e=>{
     if(p1.length<6){ st.textContent="Use pelo menos 6 caracteres."; return; }
     if(p1!==p2){ st.textContent="As senhas não conferem."; return; }
     ok.disabled=true;
-    const {error}=await sb.auth.updateUser({password:p1});
+    const {error}=await sb.auth.updateUser({password:p1, data:{senha_definida:true}});
     ok.disabled=false;
-    if(error){ st.textContent="Não foi possível trocar a senha agora."; return; }
+    if(error){ st.textContent = /different|same/i.test(error.message||"") ? "A senha nova precisa ser diferente da provisória." : "Não foi possível trocar a senha agora."; return; }
+    window.__obrig=false;
     registrar("Trocou a própria senha");
     $("modal").hidden=true; setStatus("Senha trocada.","ok"); return;
   }
@@ -977,7 +979,11 @@ async function atualizarSessao(session){
   if(papel){ try{ localStorage.setItem("presenca_unidade", U.id); }catch(e){} }
   if(!papel){ rows=[]; log=[]; try{ renderDashboard(); }catch(e){} }
   applyLock();
-  if(papel && CONVITE && !window.__senhaPedida){ window.__senhaPedida=true; openLock("change"); }
+  // Convite, "esqueci a senha" ou primeiro acesso (senha provisória): exige criar uma senha antes de usar
+  const semSenhaPropria = papel && !(session.user.user_metadata && session.user.user_metadata.senha_definida===true);
+  if(papel && (semSenhaPropria || (CONVITE && !window.__senhaPedida)) && !(lockMode==="change" && !$("modal").hidden)){
+    window.__senhaPedida=true; window.__obrig=true; openLock("change");
+  }
   if(mudou && papel) carregar();
 }
 
