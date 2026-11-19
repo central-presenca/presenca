@@ -718,7 +718,7 @@ function linhasLimpas(txt){
 }
 // Descobre o culto pelo dia da semana e pelo horário escritos na linha (ou pela data, se o dia não vier escrito)
 function acharCulto(linha, dataISO){
-  const l=norm(linha);
+  const l=norm(linha).replace(/\d{1,2}\/\d{1,2}(\/\d{2,4})?/g," ");   // tira a data antes de procurar o horário
   const porNome=CULTOS.find(c=>c.palavras && new RegExp(c.palavras).test(l));
   if(porNome) return {id:porNome.id, duvida:false};
   const dias=[/\bdom/,/\bseg/,/\bter[cç]/,/\bqua/,/\bqui/,/\bsex/,/\bsab/];
@@ -731,43 +731,102 @@ function acharCulto(linha, dataISO){
   const empate = cands.length>1 && (min==null || Math.abs(hmin(cands[0])-min)===Math.abs(hmin(cands[1])-min));
   return {id:cands[0]&&cands[0].id, duvida: empate};
 }
+// Nome da equipe como está na configuração da unidade (ex.: "Enfermeira" -> "Enfermaria", "cafeteira" -> "Cafeteria/Livraria")
+function equipeCanonica(nome){
+  const n=norm(nome).replace(/[^a-z0-9/ ]/g," ").trim(); if(!n) return nome;
+  const pal=n.split(/[\s/]+/).filter(p=>p.length>=3);
+  for(const e of EQUIPES_PADRAO){
+    const pe=norm(e).split(/[\s/]+/).filter(p=>p.length>=3);
+    if(pal.some(a=>pe.some(b=>a.slice(0,5)===b.slice(0,5)))) return e;
+  }
+  return nome.charAt(0).toUpperCase()+nome.slice(1);
+}
 // Lê um ou vários relatórios. Um novo relatório começa quando aparece de novo "Culto" ou "Data".
+// Aceita as variações que aparecem no WhatsApp: "VTL-", número sem dois-pontos, "494 adultos e 12 crianças",
+// "CDC Voluntários: 23", pastores por nome com o total na linha seguinte, "1.155", total geral na linha de baixo.
 function parseWhatsAll(txt){
   const blocos=[]; let cur=null;
-  const novo=()=>{ cur={r:{voluntarios:[]}, avisos:[], totalTexto:null, achou:0, sec:"aud", cultoTxt:""}; blocos.push(cur); };
-  const numOf = l => { const m=l.match(/[:=]\s*=?\s*(\d+)/); return m? parseInt(m[1],10) : (/[:=]\s*$/.test(l)?0:null); };
+  const novo=()=>{ cur={r:{voluntarios:[]}, avisos:[], totalTexto:null, achou:0, sec:"aud", cultoTxt:"", audTotal:null, audLinha:null, tp:null, volTexto:null, cdcNum:null, esperaGeral:false, obs:[], vazios:{}}; blocos.push(cur); };
+  const num = s => { const m=String(s).match(/(\d{1,3}(?:\.\d{3})+|\d+)/); return m? parseInt(m[1].replace(/\./g,""),10) : null; };
+  const depois = l => { const i=l.search(/[:=]/); return i<0 ? null : l.slice(i+1); };      // texto depois do ":" ou "="
+  const valor = l => { const d=depois(l); if(d==null) return null; const n=num(d); return n!=null ? n : (/^\s*$/.test(d) ? 0 : null); };
+  const ultimo = l => { const m=l.match(/(\d{1,3}(?:\.\d{3})+|\d+)\s*(?:pessoas?)?\s*$/); return m? parseInt(m[1].replace(/\./g,""),10) : null; };
+  const lerData = (raw)=>{ const m=raw.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/); if(!m) return null;
+    const now=new Date(); let y=m[3]?parseInt(m[3],10):now.getFullYear(); if(y<100) y+=2000;
+    let dt=new Date(y,parseInt(m[2],10)-1,parseInt(m[1],10)); if(!m[3] && dt>now) dt.setFullYear(y-1); return isoDate(dt); };
   for(const raw of linhasLimpas(txt)){
-    const l=norm(raw); const v=numOf(raw);
-    if(/^culto\b/.test(l)){ if(!cur || cur.cultoTxt) novo(); cur.cultoTxt=raw; cur.achou++; continue; }
-    if(/^data\b/.test(l)){
-      const m=raw.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
-      if(m){ if(!cur || cur.r.data) novo();
-        const now=new Date(); let y=m[3]?parseInt(m[3],10):now.getFullYear(); if(y<100) y+=2000;
-        let dt=new Date(y,parseInt(m[2],10)-1,parseInt(m[1],10));
-        if(!m[3] && dt>now) dt.setFullYear(y-1);
-        cur.r.data=isoDate(dt); cur.achou++; }
-      continue;
-    }
+    const l=norm(raw).replace(/^[\s\-–•>]+/,"");
+    if(/^culto\b/.test(l)){ if(!cur || cur.cultoTxt) novo(); cur.cultoTxt=raw; cur.achou++; const d=lerData(raw); if(d && !cur.r.data){ cur.r.data=d; cur.achou++; } continue; }
+    if(/^data\b/.test(l)){ const d=lerData(raw); if(d){ if(!cur || cur.r.data) novo(); cur.r.data=d; cur.achou++; } continue; }
     if(!cur) continue;
     const out=cur.r;
+    // total geral pode vir na linha de baixo
+    if(cur.esperaGeral){ const n=num(l); cur.esperaGeral=false; if(n!=null){ cur.totalTexto=n; continue; } }
+    if(/^total geral\b/.test(l)){ const n=valor(l); if(n){ cur.totalTexto=n; } else cur.esperaGeral=true; continue; }
+    if(/^obs/.test(l)){ const t=raw.replace(/^[^:]*:\s*/,"").trim(); if(t) cur.obs.push(t); continue; }
     if(/^evento\b/.test(l)){ out.evento=raw.replace(/^[^:]*:\s*/,"").trim(); continue; }
-    if(/^voluntarios\b/.test(l) && !/total/.test(l)){ cur.sec="vol"; continue; }
-    if(/central da crianca/.test(l) || (/^cdc\b/.test(l) && v==null)){ cur.sec="cdc"; continue; }
-    if(/^estacionamento\s*:?\s*$/.test(l)){ cur.sec="est"; continue; }
-    if(v==null) continue;
-    if(/^vlt\s*cdc\b/.test(l)){ out.vltCdc=v; cur.achou++; continue; }
-    if(/^vlt\b/.test(l)){ const nome=raw.replace(/^vlt\s*/i,"").replace(/\s*[:=].*$/,"").trim(); out.voluntarios.push({equipe:nome,qtd:v}); cur.achou++; continue; }
-    if(/^criancas?\b/.test(l) && cur.sec==="cdc"){ out.criancasCdc=v; cur.achou++; continue; }
+    if(/^estacionamento\b/.test(l)){ cur.sec="est"; continue; }
+    // Central da Criança
+    if(/^cdc\s*[-:]?\s*(vlt|volunt)/.test(l)){ const n=ultimo(l); if(n!=null){ out.vltCdc=n; cur.achou++; } cur.sec="cdc"; continue; }
+    if(/^vlt\s*cdc\b/.test(l)){ const n=ultimo(l); if(n!=null){ out.vltCdc=n; cur.achou++; } cur.sec="cdc"; continue; }
+    if(/central da crianca/.test(l) || /^cdc\b/.test(l)){ cur.sec="cdc"; const n=ultimo(l); if(n!=null) cur.cdcNum=n; continue; }
+    if(cur.sec==="cdc" && /^(vlt|vtl|volunt)/.test(l)){ const n=ultimo(l); if(n!=null){ out.vltCdc=n; cur.achou++; } continue; }
+    if(cur.sec==="cdc" && /^criancas?\b/.test(l)){ const n=ultimo(l); if(n!=null){ out.criancasCdc=n; cur.achou++; } continue; }
+    // voluntários
+    if(/^total de (vlt|vtl|volunt)/.test(l)){ cur.volTexto=ultimo(l); continue; }
+    if(/^voluntarios\b/.test(l)){ cur.sec="vol"; continue; }
+    if(/^v[lt]{2}\b/.test(l)){
+      const nome=raw.replace(/^[\s*]*v[lt]{2}\s*[-–:]?\s*/i,"").replace(/[\s:=\-–]*\d[\d.]*\s*$/,"").replace(/\s*[:=\-–]\s*$/,"").trim();
+      const n=ultimo(l); if(n==null) continue;
+      if(!nome){ if(cur.sec==="cdc"){ out.vltCdc=n; cur.achou++; } continue; }
+      out.voluntarios.push({equipe:equipeCanonica(nome), qtd:n}); cur.achou++; continue;
+    }
+    // pastores: número na linha, ou nomes e o total na linha seguinte
+    if(/^pastores?\b/.test(l)){
+      const d=depois(raw)||""; const n=num(d);
+      if(n!=null){ out.pastores=n; cur.achou++; cur.sec="pasNomes"; }
+      else { const nomes=d.split(/,| e /).map(x=>x.trim()).filter(Boolean); if(nomes.length){ cur.obs.push("Pastores: "+nomes.join(", ")); out.pastores=nomes.length; } cur.sec="pas"; }
+      continue;
+    }
+    if(cur.sec==="pasNomes"){ cur.sec="x"; if(!/\d/.test(l) && /[a-z]/.test(l)){ cur.obs.push("Pastores: "+raw.split(/,| e /).map(x=>x.trim()).filter(Boolean).join(", ")); continue; } }
+    if(/^(total\b|=)/.test(l)){
+      const n=ultimo(l)!=null?ultimo(l):num(l); if(n==null) continue;
+      if(/^total participantes/.test(l)){ cur.tp=n; continue; }
+      if(cur.sec==="pas"){ out.pastores=n; cur.achou++; cur.sec="x"; continue; }
+      if(cur.sec==="aud"){ cur.audTotal=n; continue; }
+      if(cur.sec==="cdc"){ continue; }
+      cur.tp=n; continue;
+    }
+    if(/^visitantes?\b/.test(l)){ const n=valor(l); if(n!=null){ if(n || out.visitantes==null) out.visitantes=n; cur.achou++; } continue; }
+    if(/^decis/.test(l)){ const n=valor(l); if(n!=null){ out.decisoes=n; cur.achou++; } continue; }
+    if(/^carros?\b/.test(l)){ const n=ultimo(l); if(n!=null){ out.carros=n; cur.achou++; } continue; }
+    if(/^motos?\b/.test(l)){ const n=ultimo(l); if(n!=null){ out.motos=n; cur.achou++; } continue; }
+    // auditório: "Auditório: 487 pessoas", "Adultos: 892", "494 adultos e 12 crianças"
+    if(/^auditorio\b/.test(l)){ cur.sec="aud"; const n=valor(l); if(n) cur.audLinha=n; continue; }
+    if(/^\d/.test(l)){ let achouFx=false; FAIXAS.forEach(f=>{ const w=norm(f.curto||f.key).replace(/s$/,""); const m=l.match(new RegExp("(\\d[\\d.]*)\\s*"+w)); if(m){ out[f.key]=num(m[1]); achouFx=true; } }); if(achouFx){ cur.achou++; continue; } }
     const fx=FAIXAS.find(f=>new RegExp(f.re||("^"+norm(f.key))).test(l));
-    if(fx){ out[fx.key]=v; cur.achou++; continue; }
-    if(/^pastores\b/.test(l)){ out.pastores=v; cur.achou++; continue; }
-    if(/^visitantes\b/.test(l)){ out.visitantes=v; cur.achou++; continue; }
-    if(/^decis/.test(l)){ out.decisoes=v; cur.achou++; continue; }
-    if(/^carros\b/.test(l)){ out.carros=v; cur.achou++; continue; }
-    if(/^motos\b/.test(l)){ out.motos=v; cur.achou++; continue; }
-    if(/^total geral\b/.test(l)){ cur.totalTexto=v; continue; }
+    if(fx){ const n=valor(l)!=null?valor(l):ultimo(l); if(n!=null){ out[fx.key]=n; if(n===0 && depois(l)!=null && !/\d/.test(depois(l))) cur.vazios[fx.key]=1; cur.achou++; } continue; }
   }
   return blocos.filter(b=>b.achou>=3).map(b=>{
+    const r=b.r, soma=()=>FAIXAS.reduce((a,f)=>a+(Number(r[f.key])||0),0), principal=FAIXAS[0].key;
+    // CDC: "CDC: 122" sem a linha de crianças = crianças da CDC
+    if(b.cdcNum!=null && r.criancasCdc==null){ r.criancasCdc = (r.vltCdc!=null && b.cdcNum>r.vltCdc && b.totalTexto==null) ? b.cdcNum - r.vltCdc : b.cdcNum; }
+    // auditório: completa a faixa principal (adultos) quando veio só o total
+    const vol=r.voluntarios.reduce((a,t)=>a+t.qtd,0), pas=Number(r.pastores)||0;
+    if(b.audLinha!=null && !(Number(r[principal])>0)){
+      const outros=soma()-(Number(r[principal])||0);
+      const comoTotal=b.audLinha-outros, comoAdultos=b.audLinha;
+      const bate = v => b.tp!=null && v+outros+vol+pas===b.tp;
+      r[principal] = bate(comoAdultos) && !bate(comoTotal) ? comoAdultos : comoTotal;
+    }
+    if(b.audTotal!=null && (!(Number(r[principal])>0) || b.vazios[principal])){
+      const outros=soma()-(Number(r[principal])||0); r[principal]=b.audTotal-outros;
+      b.avisos.push(`${FAIXAS[0].label} não veio na mensagem; calculei pelo total do auditório (${fmt(b.audTotal)}).`);
+    }
+    if(b.audTotal!=null && soma()!==b.audTotal) b.avisos.push(`a mensagem diz auditório ${fmt(b.audTotal)}, a soma das faixas dá ${fmt(soma())}`);
+    if(b.volTexto!=null && b.volTexto!==vol) b.avisos.push(`a mensagem diz ${fmt(b.volTexto)} voluntários, a soma das equipes dá ${fmt(vol)}`);
+    if(b.tp!=null && b.tp!==soma()+vol+pas) b.avisos.push(`a mensagem diz total participantes ${fmt(b.tp)}, a soma dá ${fmt(soma()+vol+pas)}`);
+    if(b.obs.length) r.obs=b.obs.join("\n");
     if(b.cultoTxt||b.r.data){ const c=acharCulto(b.cultoTxt, b.r.data); if(b.cultoTxt||c.id){ b.r.culto=c.id; if(c.duvida) b.avisos.push("Confira o culto: o horário não estava claro na mensagem."); } }
     if(!b.cultoTxt) b.avisos.push("A mensagem não diz o culto; deduzi pela data.");
     return b;
@@ -776,9 +835,9 @@ function parseWhatsAll(txt){
 function completar(b){ // transforma o que foi lido num lançamento completo
   const r=b.r, novo={data:r.data, culto:r.culto};
   NUMS.forEach(k=>novo[k]= r[k]!=null ? r[k] : 0);
-  novo.voluntarios=r.voluntarios; novo.evento=r.evento||""; novo.obs="";
+  novo.voluntarios=r.voluntarios; novo.evento=r.evento||""; novo.obs=r.obs||"";
   const antigo=r.data&&r.culto ? rows.find(x=>x._id===docId(r.data,r.culto)) : null;
-  if(antigo){ if(!novo.evento) novo.evento=antigo.evento||""; novo.obs=antigo.obs||""; }
+  if(antigo){ if(!novo.evento) novo.evento=antigo.evento||""; if(!novo.obs) novo.obs=antigo.obs||""; }
   return {novo, antigo};
 }
 $("b-paste-clear").addEventListener("click",()=>{ $("i-paste").value=""; $("paste-msg").hidden=true; });
@@ -794,7 +853,7 @@ $("b-parse").addEventListener("click",()=>{
   r.data=r.data||cur.data; r.culto=r.culto||cur.culto;
   const {novo, antigo}=completar(b);
   if(!r.voluntarios.length) novo.voluntarios=cur.voluntarios;
-  if(!antigo) novo.obs=cur.obs;
+  if(!antigo && !novo.obs) novo.obs=cur.obs;
   const existe=!!antigo; novo._id = existe ? docId(novo.data,novo.culto) : undefined;
   fillForm(novo); $("frm").dataset.touched="1";
   const t=totals(novo), msgs=[];
